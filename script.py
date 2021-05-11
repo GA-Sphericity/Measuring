@@ -13,8 +13,17 @@ start_path = "" # the starting point for searching files
 OB = bpy.data.objects
 
 #### VECTOR MATH #####
+'''
+A line is defiened as a point which the line crosses, aswell as a direction. In other words, two vectors.
+The first vector is the point, the second is the direction. 
+l = [3,4][5,6] would for example be a line going through the point [3,4] 
+and having the same direction as the vector [5,6].
+'''
 
 def normalize(vector):
+    '''
+    returns a given vector scaled to have a magnitude of 1
+    '''
     x, y = vector[0], vector[1]
     scale = sqrt(1/(x**2+y**2))
     x *= scale
@@ -35,12 +44,24 @@ def rotate_90deg(vector):
     return [x, y]
 
 def rotate_line(line, angle):
+    '''
+    A line consists of two vectors; a point and a direction. To rotate the point around origo, 
+    while also rotating the the direction by the same angle, we simply rotate both vectors of the line.
+    '''
     new_line = [rotate_vector(line[0], angle),rotate_vector(line[1], angle)]
     return new_line
 
 
 def get_point(line, t):
-    px, py, vx, vy = line[0][0], line[0][1], line[1][0], line[1][1]
+    '''
+    Any point on a line can be described as the line itself the variable t. 
+    The direction vector of the line is simply scaled by t, and then the point and direction vectors are added togehter.
+    t = 0 would as such for example yield a point in the same position as the point defining the line,
+    while t = 100000 would yield a point very far away from the point defining the line.
+    '''
+    
+    #px and py are the x and y values of the point. vx and vy are the x and y values for the direction.
+    px, py, vx, vy = line[0][0], line[0][1], line[1][0], line[1][1] 
 
     x = px + vx * t
     y = py + vy * t
@@ -48,10 +69,18 @@ def get_point(line, t):
 
 
 def intersection(line0, line1):
+    '''
+    Note: does not work with parallel lines.
+    '''
     px0, py0, vx0, vy0 = line0[0][0], line0[0][1], line0[1][0], line0[1][1]
     px1, py1, vx1, vy1 = line1[0][0], line1[0][1], line1[1][0], line1[1][1]
 
-    ''' from line0 we get:
+    ''' 
+    Two non-paralell lines share a point in their intersection. 
+    This point can be described using either line and a variable t.
+    Describing the point using both lines individually yields an equations system.
+    
+    from line0 we get:
     x = px0 + t0 * vx0
     y = py0 + t0 * vy0
     and from line1 we get:
@@ -61,26 +90,34 @@ def intersection(line0, line1):
     Solving the equation system for t0 gives us: '''
 
     t0 = (px1*vy1 - px0*vy1 - vx1*py1 + vx1*py0) / (vx0*vy1 - vy0*vx1)
-
-    '''NB: if our lines are parallel, the divisor = 0 and we will get an error.
-    This function should obviously not be used with parallel lines.'''
-
+    #if our lines are parallel, the divisor = 0 and we will get an error.
+    
+    '''We can then use t0 and line1 to get the coordinates of the intersection.
+    '''
+    
     return get_point(line0, t0)
 
 def get_line_between_points(point1, point2):
+    '''Returns a line going from one point to another.
+    '''
+    
     vector = [point2[0]-point1[0], point2[1]-point1[1]]
     vector = normalize(vector)
     line = [point1, vector]
     return line
 
 def distance_points(point1, point2):
+    '''Returns the distance between two points
+    '''
     dist =  sqrt( (point2[0]-point1[0])**2 + (point2[1]-point1[1])**2 )
     return dist
 
 def distance_point_to_line(point, line):
-    '''We construct a new line, perpendicular to our
-    original line, through our orignal point. We then
-    calculate the distance between our originl point and
+    '''Returns the shortest distance between a given point and line. 
+    Works as follows: We construct a new line, perpendicular to our
+    original line, through our orignal point. We find the 
+    intersection between new and original lines. We then
+    calculate the distance between our original point and
     the intersection between our new and original lines.'''
 
     new_line_vector = rotate_90deg(line[1])
@@ -111,25 +148,51 @@ def is_between_lines(point, line1, line2):
 
     return {'inside':inside, 'shorter_to_line1' : shorter_to_line1}
 
+### END OF VECTOR MATH ####
+
 def get_indices(obj, vertex_group_name):
+    '''Returns vertex and edge indices of a given vertex group of a blender mesh object.
+    This function is highly ineffective, partly due to what data is accesible through bpy.
+    
+    Short explaination of how this works in blender: A mesh is a set of verices, 
+    edges and faces that are the fundamentals of a 3d-object. 
+    In blender, we are able to divide vetrexes into vertex groups.
+    Why this is relevant: A picture can be described of horizontal rows of pixels. 
+    Each row represents a slice of the object photographed. This script computes 
+    a virtual version every such slice. Each slice is represented in the blender environment by a vertex group.
+    '''
+    vg_idx = obj.vertex_groups[vertex_group_name].index #This is the index of the vertex group
 
-    vg_idx = obj.vertex_groups[vertex_group_name].index
-
-    vs = [ n for n, v in enumerate(obj.data.vertices) if vg_idx in [ vg.group for vg in v.groups ] ]
-    es = []
+    vs = [ n for n, v in enumerate(obj.data.vertices) if vg_idx in [ vg.group for vg in v.groups ] ] #Vertex indices of the given vertex group.
+    #Iterates through every vertex v in an object. If vg_index, i.e the vertex group we are looking for, 
+    #is found among the vertex groups v.groups associated with said vertex v.
+    
+    es = [] #edge indicies of the given vertex group.
     for e in obj.data.edges:
-        truth_table = []
+        # An edge consists of two connected vertices. We iterate through all edges in the object
+        # and check if both their vertices are associated with our vertex group
+        truth_table = [] 
         for v in e.vertices:
             truth_table.append(vg_idx in [ vg.group for vg in obj.data.vertices[v].groups ])
         if not False in truth_table:
             es.append([v for v in e.vertices])
 
-    return vs, es
+    return vs, es # We return the indices of vertices and edges associated with the vertex group looked for.
 
 
 #### BOOL2D and BOOL3D : MESH CREATION #####
 
 def bool_2d(obj, vertices_indices, edges_indices, x1, x2, angle, z):
+    '''This function is the heart of this script. It allows us to trim off parts of a 2d area/slice based on two lines rotated a given angle.
+    Anything between the lines will be kept. Anything outside of the lines will be trimmed off.
+    x1 and x2 aswell as the angle defines the lines.
+    obj is the mesh object in which we want to work.
+    vertices_indices and edge_indices define what part of the mesh we are working with.
+    z defines at what vertical position our slice is located.
+    
+    When we trim off parts of our slice, some vertices will be deleted, and some new will be created at our "cuts".
+    If a vertex is between our lines, i.e "inside", it will be kept. If a vertex is "outside", it will be deleted.
+    '''
 
     #we define our lines
     line1 = [rotate_vector([x1,0], angle), rotate_vector([0,1], angle)]
@@ -138,58 +201,76 @@ def bool_2d(obj, vertices_indices, edges_indices, x1, x2, angle, z):
     new_vertices_index = [] #Vertices to keep is stored here, as indexes
     new_vertices_coordinates = [] #Vertices to create is stored here, as xy coordinates
 
-    verts = obj.data.vertices
+    verts = obj.data.vertices 
 
     for e in edges_indices:
+        '''
+        For every edge we want to ask the following:
+        Does it cross our lines?
+        If so, where and how? 
+        Which line does it cross?
+        Where do we cut it?
+        If it does cross one or two lines, we have to cut it where it intersects with our lines.
+        We do this mainly by analyzing the two vetrices that constuct the edge.
+        The following codeblock is responsible for this crucial task.
+        '''
 
-        line_relations_list = []
+        line_relations_list = [] #Here we store information about the two vertices of an edge in relation to our lines.
         vert_co = [] #Here we store the xy coordinates of each vertex of an edge
 
         for v in e:
 
-            p = [ verts[v].co[0], verts[v].co[1] ] #we get xy coords
+            p = [ verts[v].co[0], verts[v].co[1] ] #we get xy coords of a vertex
             vert_co.append(p)
 
-            if not (v in new_vertices_index): #If we havent already looked at this vertice and found that it is inside
-                line_relations = is_between_lines(p, line1, line2)
-                if line_relations['inside']:
-                    new_vertices_index.append(v)
+            if not (v in new_vertices_index): #If we havent already looked at this vertex and found that it is between our lines
+                line_relations = is_between_lines(p, line1, line2) #We check if a vertex is inside, aswell as which line it's closest to
+                if line_relations['inside']: #If the vertex is inside, it will be kept.
+                    new_vertices_index.append(v) 
 
-                line_relations_list.append(line_relations)
+                line_relations_list.append(line_relations) 
 
             else:
-                line_relations_list.append({'inside':True})
+                line_relations_list.append({'inside':True}) #If we have already checked this vertex
 
 
 
         if (not line_relations_list[0]['inside']) and (not line_relations_list[1]['inside']):
+            #None of the vertices were inside
 
             if (line_relations_list[0]['shorter_to_line1'] != line_relations_list[1]['shorter_to_line1']):
+                #If the vertices are on two different sides of our trimming area defined by our lines, 
+                #the edge has to be cut in two places, one for each line.
 
-                new_line = get_line_between_points(vert_co[0], vert_co[1])
-                inter0 = intersection(line1, new_line)
+                new_line = get_line_between_points(vert_co[0], vert_co[1]) #We contrsuct a line represetning the edge.
+                inter0 = intersection(line1, new_line) #We find the two intersections where the edge should be cut.
                 inter1 = intersection(line2, new_line)
 
-                new_vertices_coordinates.append(inter0)
+                new_vertices_coordinates.append(inter0) #The newfound intersections are saved as new vertices
                 new_vertices_coordinates.append(inter1)
 
         elif (line_relations_list[0]['inside'] != line_relations_list[1]['inside']):
+            #One vertex is inside, one is outside. The edge has to be cut in one place.
 
-            outside_vert = int(line_relations_list[0]['inside'])
+            outside_vert = int(line_relations_list[0]['inside']) #We check which vertex is outside
 
-            if line_relations_list[outside_vert]['shorter_to_line1']:
+            if line_relations_list[outside_vert]['shorter_to_line1']: #Check which line the edge crossed
                 line_to_use = line1
             else:
                 line_to_use = line2
 
-            #Construct a linear function between the two known vertices
+            #Construct a line representing the edge defined by the two known vertices
             new_line = get_line_between_points(vert_co[0], vert_co[1])
 
-            #Find the intersection of our original function and our new function
+            #Find the intersection of our line and our edge
             inter = intersection(line_to_use, new_line)
 
-            new_vertices_coordinates.append(inter)
-
+            new_vertices_coordinates.append(inter) 
+            
+        #else: pass
+        
+    ## At this point, all our edges has been trimmed and we have a fresh list of vertices representing the trimmed slice.
+    
     for v in new_vertices_index:
         p = [ verts[v].co[0], verts[v].co[1] ]
         new_vertices_coordinates.append(p)
@@ -198,53 +279,63 @@ def bool_2d(obj, vertices_indices, edges_indices, x1, x2, angle, z):
     for v in new_vertices_coordinates:
         v.append(z)
 
-    return new_vertices_coordinates
+    return new_vertices_coordinates #the new list of vertices is returned, as coordinates rather than indices
 
 def bool_3d(obj, ob2, layer_lines, angle):
+    
+    '''This function takes data called "layer lines", which most likely have been computed from an image, 
+    and computes how to trim a mesh object accordingly. Each layer has two lines, 
+    which is passed to bool_2d which does the trimming of a 2d layer in 2d.
+    
+    Origianl object is obj, trimmed object is written to ob2.
+    '''
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    layers = {}
+    layers = {} #Data of our new trimmed object will be stored in layers here
 
     #### CALCULATE OUR NEW LAYERS ####
 
-    for g in obj.vertex_groups:
-        layer_key = g.name
-        if layer_key in layer_lines:
-            verts, edges = get_indices(obj, g.name)
+    for g in obj.vertex_groups: 
+        #Every layer is represented by a vertex group. 
+        #We want to look at every layer. 
+        #As such, we iterate the vertex groups.
+        
+        layer_key = g.name #The layers in layer_lines are supposed to share keys/names with the vertex groups of the objects.
+        if layer_key in layer_lines: #If there are no data of a given layer in layer_lines, the layer should be empty.
+            verts, edges = get_indices(obj, g.name) 
             if len(verts)  > 0:
                 z = obj.data.vertices[verts[0]].co[2]
                 x_lines = layer_lines[layer_key]
-                layer_co = bool_2d(obj, verts, edges, x_lines[0], x_lines[1], angle, z)
+                layer_co = bool_2d(obj, verts, edges, x_lines[0], x_lines[1], angle, z) #The layer is trimmed according the its corresponding lines
                 layers[layer_key] = layer_co
 
-
-
-    #### WE WILL NOW MANIPULATE OUR MESH ####
-
-    create_object(layers, ob2)
+    create_object(layers, ob2) #We take the data represeting the trimmed object, and make it into a blender-object
 
 def create_object(layers, ob2):
-
-    layer_indices = {}
+    '''Takes data stored in python dictionaries and lists, and makes into a dedicated blender object.
+    Uses bmesh.
+    '''
+    
+    ### TURING INTO MESH DATA ###
+    
+    layer_indices = {} ### Indicies of every vertex of every layer will be stored here.
 
     me = ob2.data
 
-    bm = bmesh.new()
+    bm = bmesh.new() 
     bm.from_mesh(me)
     bm.clear()
 
-    current_vert = 0
-    for l in layers:
-        #print("creeate_object: layers: ", layers[l])
+    current_vert = 0 
+    for l in layers: #We add all the vertices from each layer to bmesh and keep track of their indicies in layer_indices
         layer_indices[l] = []
         for v in layers[l]:
-            #print("v: ", v)
             bm.verts.new(v)
             layer_indices[l].append(current_vert)
             current_vert +=1
 
-    bm.to_mesh(me)
+    bm.to_mesh(me) 
     bm.free
 
     #### REMOVING OLD VERTEX GROUPS AND ADDING NEW ONES ####
@@ -275,9 +366,7 @@ def create_object(layers, ob2):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-#### IMAGE INETRPRETATION ###
-
-#höhö
+#### Printing Functions ###
 
 def print_progress(progress, length, description):
     print("\r%s: %d %% " % (description, int(100*progress/length)), end = "")
@@ -293,12 +382,16 @@ def print_progress_done(description):
 #### MODEL BALL ####
 
 def create_initial_object(all_images, ob2):
-    init_im = [0, int(len(all_images)/2)] # HE
-    init_angles = [ 0, radians(180*init_im[1]/len(all_images)) ]
+    '''Creates an object based on two images taken from more or less perpendicular angles
+    '''
+    
+    init_im = [0, int(len(all_images)/2)] #The first two images to be used.
+    init_angles = [ 0, radians(180*init_im[1]/len(all_images)) ] #The first two angles to be used.
 
     layers = {}
 
-
+    ### This is essentially the same as bool 2D, only that we  at this point have no object we can trim.
+    
     for l in all_images[ init_im[0] ]: #l is the name of the layer
         if l in all_images[ init_im[1] ]:
 
@@ -331,14 +424,15 @@ def create_initial_object(all_images, ob2):
 
             layers[l] = point_list
 
-    create_object(layers, ob2)
-    return init_im
+    create_object(layers, ob2) # this is the main result of the function
+    return init_im #The images used are returned, so that we can keep track of them and not  use them again.
 
 
 
 ### CALCULATE SPHERICITY ###
 
 def get_sphericity(obj):
+    '''Wadell's definition of sphericity (1935)'''
 
     me = obj.data
     bm = bmesh.new()
@@ -357,6 +451,7 @@ def get_sphericity(obj):
 ### RUNNER ###
 
 def create_3d_model(ALL_IMAGES, goal_object):
+    '''Creates a 3d-object based on image data from a set of images'''
 
     bpy.context.view_layer.objects.active = goal_object
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -374,12 +469,14 @@ def create_3d_model(ALL_IMAGES, goal_object):
 
 
 def analyze(name, ALL_IMAGES):
+    #Takes care of many of the the blender-specific parts of this project.
+    #Two objects are created, "object" and "object_no_mod". "object" is the final object, utilising a couple of blender-modifiers.
 
     print("Analyzing %s in directory:\n%s" % (name, "dir") )
 
     start_time = perf_counter()
 
-    '''First off, we set up our objects and collections'''
+    #First off, we set up our objects and collections (See blender official docs for more info):
 
     parent_collection_name = 'Collection'
 
@@ -399,7 +496,7 @@ def analyze(name, ALL_IMAGES):
     collection_child.objects.link(object_no_mod)
     collection_child.objects.link(object)
 
-    '''Then, we add modifiers with the right settings to our main object'''
+    #Then, we add modifiers with the right settings to our main object
     solidify = object.modifiers.new(name="Solidify", type='SOLIDIFY')
     solidify.thickness = 1
     solidify.offset = 0
@@ -413,10 +510,10 @@ def analyze(name, ALL_IMAGES):
     smooth.iterations = 4
 
 
-    ''' We create our raw model on our no_mod object '''
+    #We create our raw model on our no_mod object
     create_3d_model(ALL_IMAGES, object_no_mod)
 
-    ''' We copy mesh data of our object_no_mod to our object with modifiers '''
+    #We copy mesh data of our object_no_mod to our object with modifiers
     task_name = 'Applying modifiers'
     print_progress_unknown(task_name)
     object.data = object_no_mod.data.copy()
@@ -429,23 +526,30 @@ def analyze(name, ALL_IMAGES):
 
     print_progress_done(task_name)
 
-    ''' We calculate the sphericity '''
+    #We calculate the sphericity
     task_name = 'Calculating sphericity'
     print_progress_unknown(task_name)
 
     sphericity = get_sphericity(object)
     print_progress_done(task_name)
 
-    '''We print results '''
+    #We print results
     end_time = perf_counter()
     print('Finished in %s' % ( strftime("%H h %M min %S sec", gmtime(end_time - start_time)) ) )
     object["sphericity"] = sphericity
     print('Sphericity: ',sphericity,'\n')
     return sphericity
 
-#### Runner ###
+
+####################################################
+### THE CODE BELOW IS SPECIFIC TO THE            ###
+### CIRCUMSTSANCES; MODIFY IT TO FIT YOU NEEDS   ###
+####################################################
+
+
+#### EXAMPLE RUNNER ###
 """
-ALL_IMAGES_json = '/home/ingvar/Documents/GA/data/Ball_Json/n2_m1_nr1_analyzed.json'
+ALL_IMAGES_json = '<file_path>'
 
 name = ALL_IMAGES_json.split('/')[-1].split('.')[0]
 
