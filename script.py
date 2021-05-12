@@ -16,7 +16,7 @@ OB = bpy.data.objects
 '''
 A line is defiened as a point which the line crosses, aswell as a direction. In other words, two vectors.
 The first vector is the point, the second is the direction. 
-l = [3,4][5,6] would for example be a line going through the point [3,4] 
+l = [[3,4][5,6]] would for example be a line going through the point [3,4] 
 and having the same direction as the vector [5,6].
 '''
 
